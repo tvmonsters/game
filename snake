@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SNAKE</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: 'Press Start 2P', monospace;
+    color: #fff;
+  }
+  h1 {
+    font-size: 2rem;
+    color: #4dff91;
+    text-shadow: 0 0 20px #4dff9188;
+    margin-bottom: 0.5em;
+    letter-spacing: 0.1em;
+  }
+  #scoreline {
+    display: flex;
+    gap: 3em;
+    margin-bottom: 0.8em;
+    font-size: 0.55rem;
+    color: #555;
+  }
+  #scoreline span { color: #4dff91; }
+  canvas {
+    border: 2px solid #222;
+    box-shadow: 0 0 40px #4dff9120;
+    image-rendering: pixelated;
+  }
+  #msg {
+    margin-top: 1em;
+    font-size: 0.5rem;
+    color: #444;
+    letter-spacing: 0.1em;
+  }
+  #msg span { color: #666; }
+  /* Mobile d-pad */
+  #dpad {
+    display: none;
+    margin-top: 1.2em;
+    display: grid;
+    grid-template-columns: repeat(3, 48px);
+    grid-template-rows: repeat(3, 48px);
+    gap: 4px;
+  }
+  .darrow {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    color: #4dff91;
+    transition: background .1s;
+  }
+  .darrow:active { background: #4dff9130; }
+  .darrow.empty { background: transparent; border-color: transparent; pointer-events: none; }
+</style>
+</head>
+<body>
+<h1>SNAKE</h1>
+<div style="font-size:2rem;color:#4dff91;text-shadow:0 0 20px #4dff9188;letter-spacing:.1em;margin-top:-.2em;margin-bottom:.3em">BY DALTON TO HALLION</div>
+<div id="scoreline">SCORE <span id="score">0</span> &nbsp;&nbsp; BEST <span id="best">0</span></div>
+<canvas id="c"></canvas>
+<div id="msg">PRESS <span>SPACE</span> TO START &nbsp;·&nbsp; ARROW KEYS TO MOVE</div>
+
+<div id="dpad">
+  <div class="darrow empty"></div>
+  <div class="darrow" id="dUp">▲</div>
+  <div class="darrow empty"></div>
+  <div class="darrow" id="dLeft">◀</div>
+  <div class="darrow empty"></div>
+  <div class="darrow" id="dRight">▶</div>
+  <div class="darrow empty"></div>
+  <div class="darrow" id="dDown">▼</div>
+  <div class="darrow empty"></div>
+</div>
+
+<script>
+const COLS = 25, ROWS = 25, CELL = 22;
+const C = document.getElementById('c');
+C.width  = COLS * CELL;
+C.height = ROWS * CELL;
+const ctx = C.getContext('2d');
+
+let snake, dir, nextDir, food, score, best = 0;
+let state = 'idle'; // idle | playing | dead
+let ticker = null;
+const SPEEDS = [150, 130, 110, 95, 82, 72, 64, 57, 50]; // ms per tick, speeds up with score
+
+function getSpeed() {
+  const tier = Math.min(Math.floor(score / 5), SPEEDS.length - 1);
+  return SPEEDS[tier];
+}
+
+function randomCell(exclude) {
+  let cell;
+  do {
+    cell = { x: Math.floor(Math.random()*COLS), y: Math.floor(Math.random()*ROWS) };
+  } while(exclude.some(s => s.x===cell.x && s.y===cell.y));
+  return cell;
+}
+
+function startGame() {
+  const mid = { x: Math.floor(COLS/2), y: Math.floor(ROWS/2) };
+  snake = [mid, {x:mid.x-1,y:mid.y}, {x:mid.x-2,y:mid.y}];
+  dir = { x:1, y:0 };
+  nextDir = { x:1, y:0 };
+  score = 0;
+  document.getElementById('score').textContent = '0';
+  food = randomCell(snake);
+  state = 'playing';
+  document.getElementById('msg').innerHTML = 'ARROW KEYS TO MOVE &nbsp;·&nbsp; <span>WASD</span> ALSO WORKS';
+  clearInterval(ticker);
+  ticker = setInterval(tick, getSpeed());
+  draw();
+}
+
+function tick() {
+  dir = nextDir;
+  const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+  // Wall collision
+  if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) { die(); return; }
+  // Self collision
+  if (snake.some(s => s.x===head.x && s.y===head.y)) { die(); return; }
+
+  snake.unshift(head);
+
+  if (head.x === food.x && head.y === food.y) {
+    score++;
+    document.getElementById('score').textContent = score;
+    if (score > best) { best = score; document.getElementById('best').textContent = best; }
+    food = randomCell(snake);
+    clearInterval(ticker);
+    ticker = setInterval(tick, getSpeed());
+  } else {
+    snake.pop();
+  }
+  draw();
+}
+
+function die() {
+  clearInterval(ticker);
+  state = 'dead';
+  drawDead();
+  document.getElementById('msg').innerHTML = 'PRESS <span>SPACE</span> TO PLAY AGAIN';
+}
+
+// ── Drawing ──────────────────────────────────────────────────────
+function draw() {
+  // Background
+  ctx.fillStyle = '#0e0e0e';
+  ctx.fillRect(0, 0, C.width, C.height);
+
+  // Subtle grid
+  ctx.strokeStyle = '#161616';
+  ctx.lineWidth = 0.5;
+  for (let x=0;x<=COLS;x++){ ctx.beginPath();ctx.moveTo(x*CELL,0);ctx.lineTo(x*CELL,C.height);ctx.stroke(); }
+  for (let y=0;y<=ROWS;y++){ ctx.beginPath();ctx.moveTo(0,y*CELL);ctx.lineTo(C.width,y*CELL);ctx.stroke(); }
+
+  // Food — pulsing dot
+  const pulse = 0.85 + Math.sin(Date.now()/200)*0.15;
+  const fr = CELL/2 - 3;
+  const fc = { x: food.x*CELL+CELL/2, y: food.y*CELL+CELL/2 };
+  const grd = ctx.createRadialGradient(fc.x,fc.y,1,fc.x,fc.y,fr*pulse);
+  grd.addColorStop(0,'#ff5555');
+  grd.addColorStop(1,'#aa1111');
+  ctx.fillStyle = grd;
+  ctx.beginPath(); ctx.arc(fc.x, fc.y, fr*pulse, 0, Math.PI*2); ctx.fill();
+  // glow
+  ctx.save(); ctx.globalAlpha=0.3;
+  ctx.shadowColor='#ff3333'; ctx.shadowBlur=12;
+  ctx.fill(); ctx.restore();
+
+  // Snake
+  snake.forEach((seg, i) => {
+    const t = i / snake.length; // 0=head, 1=tail
+    const r = CELL - 4;
+    const sx = seg.x * CELL + 2, sy = seg.y * CELL + 2;
+
+    // Color gradient: bright green at head → darker at tail
+    const green = Math.round(255 - t*80);
+    const glow  = Math.round(145 - t*60);
+    ctx.fillStyle = `rgb(${Math.round(30+t*10)}, ${green}, ${glow})`;
+
+    if (i === 0) {
+      // Head: slightly rounded square
+      roundRect(ctx, sx, sy, r, r, 5);
+      ctx.fill();
+      drawEyes(seg, dir);
+    } else {
+      roundRect(ctx, sx+1, sy+1, r-2, r-2, 3);
+      ctx.fill();
+    }
+  });
+}
+
+function drawDead() {
+  draw();
+  // Darken overlay
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(0,0,C.width,C.height);
+
+  ctx.fillStyle = '#ff4444';
+  ctx.font = 'bold 14px "Press Start 2P"';
+  ctx.textAlign = 'center';
+  ctx.fillText('GAME OVER', C.width/2, C.height/2 - 12);
+  ctx.fillStyle = '#888';
+  ctx.font = '8px "Press Start 2P"';
+  ctx.fillText('SCORE: ' + score, C.width/2, C.height/2 + 12);
+  ctx.textAlign = 'left';
+}
+
+function drawEyes(seg, d) {
+  const cx = seg.x*CELL + CELL/2;
+  const cy = seg.y*CELL + CELL/2;
+  const offset = 5;
+  // eye positions depend on direction
+  let e1, e2;
+  if (d.x===1)  { e1={x:cx+3,y:cy-offset}; e2={x:cx+3,y:cy+offset}; }
+  else if (d.x===-1){ e1={x:cx-3,y:cy-offset}; e2={x:cx-3,y:cy+offset}; }
+  else if (d.y===-1){ e1={x:cx-offset,y:cy-3}; e2={x:cx+offset,y:cy-3}; }
+  else           { e1={x:cx-offset,y:cy+3}; e2={x:cx+offset,y:cy+3}; }
+
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(e1.x,e1.y,2.5,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(e2.x,e2.y,2.5,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.arc(e1.x+d.x,e1.y+d.y,1.2,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(e2.x+d.x,e2.y+d.y,1.2,0,Math.PI*2); ctx.fill();
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
+  ctx.closePath();
+}
+
+// Animate food pulse while idle/dead
+function idleLoop() {
+  if (state !== 'playing') { draw(); requestAnimationFrame(idleLoop); }
+}
+
+// ── Input ────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === ' ' || e.key === 'Enter') {
+    if (state !== 'playing') startGame();
+    return;
+  }
+  handleDir(e.key);
+});
+
+function handleDir(key) {
+  if (state !== 'playing') return;
+  if ((key==='ArrowUp'||key==='w'||key==='W')    && dir.y!==1)  nextDir={x:0,y:-1};
+  if ((key==='ArrowDown'||key==='s'||key==='S')  && dir.y!==-1) nextDir={x:0,y:1};
+  if ((key==='ArrowLeft'||key==='a'||key==='A')  && dir.x!==1)  nextDir={x:-1,y:0};
+  if ((key==='ArrowRight'||key==='d'||key==='D') && dir.x!==-1) nextDir={x:1,y:0};
+}
+
+// D-pad
+document.getElementById('dUp').addEventListener('touchstart',    e=>{e.preventDefault();if(state!=='playing')startGame();else handleDir('ArrowUp');},{passive:false});
+document.getElementById('dDown').addEventListener('touchstart',  e=>{e.preventDefault();if(state!=='playing')startGame();else handleDir('ArrowDown');},{passive:false});
+document.getElementById('dLeft').addEventListener('touchstart',  e=>{e.preventDefault();if(state!=='playing')startGame();else handleDir('ArrowLeft');},{passive:false});
+document.getElementById('dRight').addEventListener('touchstart', e=>{e.preventDefault();if(state!=='playing')startGame();else handleDir('ArrowRight');},{passive:false});
+
+// Show dpad on touch devices
+window.addEventListener('touchstart', () => {
+  document.getElementById('dpad').style.display = 'grid';
+}, {once:true});
+
+// Initial idle draw
+food = randomCell([]);
+draw();
+requestAnimationFrame(idleLoop);
+</script>
+</body>
+</html>
